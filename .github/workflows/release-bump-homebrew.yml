@@ -89,19 +89,19 @@ jobs:
           fi
 
           FILE_PATH="$FILE" URL_VAL="$URL" SHA_VAL="$SHA" python3 - <<'PY'
-import os
-import pathlib
-import re
+          import os
+          import pathlib
+          import re
 
-p = pathlib.Path(os.environ["FILE_PATH"])
-url = os.environ["URL_VAL"]
-sha = os.environ["SHA_VAL"]
+          p = pathlib.Path(os.environ["FILE_PATH"])
+          url = os.environ["URL_VAL"]
+          sha = os.environ["SHA_VAL"]
 
-s = p.read_text(encoding="utf-8")
-s = re.sub(r'^\s*url\s+".*"\s*$', f'  url "{url}"', s, flags=re.M)
-s = re.sub(r'^\s*sha256\s+"([0-9a-f]{64}|REPLACE_ME)"\s*$', f'  sha256 "{sha}"', s, flags=re.M)
-p.write_text(s, encoding="utf-8")
-PY
+          s = p.read_text(encoding="utf-8")
+          s = re.sub(r'^\s*url\s+".*"\s*$', f'  url "{url}"', s, flags=re.M)
+          s = re.sub(r'^\s*sha256\s+"([0-9a-f]{64}|REPLACE_ME)"\s*$', f'  sha256 "{sha}"', s, flags=re.M)
+          p.write_text(s, encoding="utf-8")
+          PY
 
       - name: Commit and push
         shell: bash
