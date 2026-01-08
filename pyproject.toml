@@ -2,10 +2,7 @@
 name = "confluence-dump"
 version = "0.1.0"
 description = "Export Confluence pages to Markdown for LLM context"
-readme = "README.md"
-authors = [
-    { name = "cheerchen", email = "cheerchen37@gmail.com" }
-]
+authors = [{ name = "cheerchen", email = "cheerchen37@gmail.com" }]
 requires-python = ">=3.8"
 dependencies = [
     "requests>=2.32.0",
