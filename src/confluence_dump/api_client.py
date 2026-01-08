@@ -99,10 +99,17 @@ class ConfluenceClient:
                 params["cursor"] = cursor
 
             url = f"{self.base_url}/wiki/api/v2/pages/{page_id}/attachments"
-            response = self.session.get(url, params=params, timeout=30)
-
-            response.raise_for_status()
-            data = response.json()
+            try:
+                response = self.session.get(url, params=params, timeout=30)
+                response.raise_for_status()
+                data = response.json()
+            except requests.exceptions.HTTPError as e:
+                # If 400 or 404, it might mean no attachments or permission issue
+                # Log warning and return what we have
+                if e.response.status_code in [400, 404]:
+                    print(f"    ⚠ Warning: Failed to fetch attachments for page {page_id} (Status {e.response.status_code})")
+                    break
+                raise e
 
             all_attachments.extend(data.get("results", []))
 

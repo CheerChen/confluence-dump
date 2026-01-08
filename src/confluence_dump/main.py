@@ -39,6 +39,7 @@ def export_page(
     page_id: str,
     output_dir: str,
     page_data: dict,
+    global_attachment_pool: dict,
     include_images: bool = True,
     all_attachments: bool = False,
     debug: bool = False,
@@ -51,6 +52,7 @@ def export_page(
         page_id: Page ID
         output_dir: Output directory
         page_data: Page data from API (may not include body content)
+        global_attachment_pool: Shared pool of attachments (filename -> download_link)
         include_images: Whether to download images
         all_attachments: Whether to download all attachments regardless of usage
         debug: Whether to save raw HTML for debugging
@@ -102,24 +104,35 @@ def export_page(
                         attachment_map[filename] = download_link
 
                 if attachment_map:
+                    # Update global pool with new attachments
+                    global_attachment_pool.update(attachment_map)
+
                     # Filter attachments if not all_attachments
                     used_attachments = attachment_map.keys()
                     if not all_attachments:
                         used_attachments = extract_confluence_images(html_content)
-                        # Intersection of available and used
-                        used_attachments = [
-                            f for f in used_attachments if f in attachment_map
-                        ]
+                
+                # If attachment_map is empty, we still might need images from global pool
+                if not attachment_map and not all_attachments:
+                     used_attachments = extract_confluence_images(html_content)
 
-                    if used_attachments:
-                        image_dir = os.path.join(page_dir, "images")
-                        os.makedirs(image_dir, exist_ok=True)
+                if used_attachments:
+                    image_dir = os.path.join(page_dir, "images")
+                    os.makedirs(image_dir, exist_ok=True)
 
-                        for filename in used_attachments:
-                            download_link = attachment_map[filename]
-                            # Only download image files
-                            if any(
-                                filename.lower().endswith(ext)
+                    for filename in used_attachments:
+                        # Try current page attachments first, then global pool
+                        download_link = attachment_map.get(filename)
+                        if not download_link:
+                             download_link = global_attachment_pool.get(filename)
+                        
+                        if not download_link:
+                            # Still not found
+                            continue
+
+                        # Only download image files
+                        if any(
+                            filename.lower().endswith(ext)
                                 for ext in [
                                     ".png",
                                     ".jpg",
@@ -254,6 +267,7 @@ def main(
 
         print(f"\n📥 Exporting to: {output_path.absolute()}\n")
 
+        global_attachment_pool = {}
         success_count = 0
         skip_count = 0
         for page_data in pages:
@@ -265,6 +279,7 @@ def main(
                 page_data["id"],
                 str(output_path),
                 page_data,
+                global_attachment_pool=global_attachment_pool,
                 include_images=include_images,
                 all_attachments=all_attachments,
                 debug=debug,

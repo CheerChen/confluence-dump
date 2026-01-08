@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1]
+- **Feature**: Support Confluence code macros conversion to Markdown code blocks
+- **Feature**: Support drawio macro image extraction (converts to PNG preview)
+- **Feature**: Global attachment pool for cross-page image sharing
+- **Fix**: Improved attachment fetch error handling (graceful 400/404 warnings)
+- **Fix**: Image download now falls back to global pool when not found in current page
+
 ## [0.2.0]
 - **Feature**: Skip exporting empty pages (pages with no content)
 - **Feature**: Only download images referenced in the content by default (reduce size)
