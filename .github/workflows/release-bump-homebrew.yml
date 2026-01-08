@@ -1,0 +1,122 @@
+name: "Release: bump Homebrew tap"
+
+'on':
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag. Leave empty to use the release tag (recommended)."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bump-homebrew-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  bump-tap:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve tag
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG_INPUT="${{ inputs.tag }}"
+          TAG_RELEASE="${{ github.event.release.tag_name }}"
+          TAG="${TAG_INPUT:-$TAG_RELEASE}"
+          if [[ -z "$TAG" ]]; then
+            echo "Tag is empty. Provide inputs.tag or publish a release." >&2
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Validate tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.tag }}"
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Unexpected tag: $TAG"; exit 1; }
+
+      - name: Compute sha256 for source tarball
+        id: sha
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.tag }}"
+          URL="https://github.com/${{ github.repository }}/archive/refs/tags/${TAG}.tar.gz"
+          curl -fsSL "$URL" -o /tmp/src.tgz
+          SHA=$(sha256sum /tmp/src.tgz | awk '{print $1}')
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout tap repo
+        uses: actions/checkout@v4
+        with:
+          repository: CheerChen/homebrew-tap
+          path: tap
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+
+      - name: Ensure Formula exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd tap
+          mkdir -p Formula
+          if [[ ! -f Formula/confluence-dump.rb ]]; then
+            python3 -c 'from pathlib import Path; Path("Formula").mkdir(parents=True, exist_ok=True); Path("Formula/confluence-dump.rb").write_text("""class ConfluenceDump < Formula\n  desc \"Export Confluence pages to Markdown for LLM context\"\n  homepage \"https://github.com/CheerChen/confluence-dump\"\n  url \"REPLACE_ME\"\n  sha256 \"REPLACE_ME\"\n  license \"MIT\"\n\n  depends_on \"uv\"\n\n  def install\n    libexec.install Dir[\"*\"]\n    (bin/\"confluence-dump\").write <<~EOS\n      #!/bin/bash\n      export PROJECT_DIR_OVERRIDE=\"#{libexec}\"\n      exec \"#{Formula[\\\"uv\\\"].opt_bin}/uv\" run --frozen --project \"#{libexec}\" confluence-dump \"$@\"\n    EOS\n  end\n\n  test do\n    assert_match version.to_s, shell_output(\"#{bin}/confluence-dump --version\")\n  end\nend\n""", encoding="utf-8")'
+          fi
+
+      - name: Update Formula/confluence-dump.rb
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="${{ steps.sha.outputs.url }}"
+          SHA="${{ steps.sha.outputs.sha256 }}"
+
+          FILE="tap/Formula/confluence-dump.rb"
+
+          if [[ ! -f "$FILE" ]]; then
+            echo "Expected formula missing at $FILE" >&2
+            ls -la tap >&2 || true
+            ls -la tap/Formula >&2 || true
+            exit 1
+          fi
+
+          FILE_PATH="$FILE" URL_VAL="$URL" SHA_VAL="$SHA" python3 - <<'PY'
+import os
+import pathlib
+import re
+
+p = pathlib.Path(os.environ["FILE_PATH"])
+url = os.environ["URL_VAL"]
+sha = os.environ["SHA_VAL"]
+
+s = p.read_text(encoding="utf-8")
+s = re.sub(r'^\s*url\s+".*"\s*$', f'  url "{url}"', s, flags=re.M)
+s = re.sub(r'^\s*sha256\s+"([0-9a-f]{64}|REPLACE_ME)"\s*$', f'  sha256 "{sha}"', s, flags=re.M)
+p.write_text(s, encoding="utf-8")
+PY
+
+      - name: Commit and push
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add Formula/confluence-dump.rb
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "confluence-dump: bump to ${{ steps.tag.outputs.tag }}"
+          git push

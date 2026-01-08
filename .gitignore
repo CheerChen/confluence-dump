@@ -1,0 +1,30 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual env / tooling
+.venv/
+.env
+.python-version
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Builds / artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Project output
+output/
